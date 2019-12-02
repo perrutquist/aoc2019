@@ -17,7 +17,6 @@ opdst = Dict{Int, Union{Int, Nothing}}(
     99 => nothing,
 )
 
-
 function opix!(s, p, i)
     i ∈ s && return
     push!(s, i)
@@ -86,7 +85,7 @@ end
 
 intcode_parser(p) = intcode_parser(OffsetVector(p, 0:length(p)-1))
 
-function programhash!(program)
+function programhash!(program::OffsetVector)
     program[1] = 0
     program[2] = 0
     hash(program)
@@ -117,20 +116,21 @@ else
     run_intcode(h::Val, n, v, p::OffsetVector) = run_intcode(h, n, v, p[n], p[v])
 end
 
-# Test using day 2's input (works with or without pointers)
+# Test using day 2's example (works with or without pointers)
 
-day2input = parse.(Int,split(readline("input2.txt"), ","))
-day2input = OffsetVector(day2input, 0:length(day2input)-1)
+day2example = [1,0,0,3,2,3,11,0,99,30,40,50]
+day2example = OffsetVector(day2example, 0:length(day2example)-1)
 
-@show intcode_parser( day2input )
+@show intcode_parser( day2example )
 
-h = compile_intcode(day2input)
+h = compile_intcode(day2example)
 
-@test run_intcode(day2input, 12, 2) == 3790689
-@test run_intcode(h, 12, 2, day2input) == 3790689
+@test run_intcode(day2example, 9, 10) == 3500
+@test run_intcode(h, 9, 10, day2example) == 3500
+@show run_intcode(day2example, 9, 10)
 
 if !allow_ptr
-    println("Try this: \n   @code_native IntCode.run_intcode(Val(hash(IntCode.day2input)), 12, 2, IntCode.day2input[12], IntCode.day2input[2])")
+    println("Try this: \n   @code_native IntCode.run_intcode(Val(hash(IntCode.day2example)), 12, 2, IntCode.day2example[12], IntCode.day2example[2])")
 end
 
 end # module
