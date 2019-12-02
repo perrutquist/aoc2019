@@ -3,7 +3,7 @@ module IntCode
 using OffsetArrays
 using Test
 
-const allow_ptr = false
+const allow_ptr = true
 
 oplen = Dict{Int, Int}(
     1 => 4,
@@ -49,11 +49,11 @@ function intcode_parser(p::OffsetArray, i0=0)
     if allow_ptr
         dst = i -> :( p[$i] )
         idst = i -> :( p[p[$i]] )
-        checkconst! = i -> push!(c, :( $(dst(i)) == $(p[i]) || return runat!(p, $i) ))
+        checkconst! = (i,ip) -> push!(c, :( $(dst(i)) == $(p[i]) || return runat!(p, $ip) ))
     else
         dst = i -> i == 1 ? :n : i == 2 ? :v : i ∈ di ? Symbol("m", i) : p[i]
         idst = i -> i == 1 ? :pn : i == 2 ? :pv : dst(p[i])
-        checkconst! = i -> i ∈ di && push!(c, :( $(dst(i)) == $(p[i]) || return runat!(rev(), $i) ))
+        checkconst! = (i,ip) -> i ∈ di && push!(c, :( $(dst(i)) == $(p[i]) || return runat!(rev(), $ip) ))
     end
 
     if !allow_ptr
@@ -70,12 +70,12 @@ function intcode_parser(p::OffsetArray, i0=0)
     for i in sort(collect(oi))
         push!(c, LineNumberNode(i, :address))
         i == i0 && push!(c, :( @label start ))
-        checkconst!(i)
+        checkconst!(i, i)
         if p[i] == 1
-            !allow_ptr && checkconst!.(i+1:i+3)
+            !allow_ptr && checkconst!.(i+1:i+3, i)
             push!(c, :( $(idst(i+3)) = $(idst(i+1)) + $(idst(i+2)) ))
         elseif p[i] == 2
-            !allow_ptr && checkconst!.(i+1:i+3)
+            !allow_ptr && checkconst!.(i+1:i+3, i)
             push!(c, :( $(idst(i+3)) = $(idst(i+1)) * $(idst(i+2)) ))
         elseif p[i] == 99
             if allow_ptr
@@ -177,6 +177,6 @@ modifytest = zerobased([1,0,0,4,0,4,4,0,99])
 
 @show intcode_parser( modifytest )
 @show run_intcode(modifytest, 0, 0)
-#@test run_intcode(modifytest, 0, 0)[0] == 4
+@test run_intcode(modifytest, 0, 0)[0] == 4
 
 end # module
