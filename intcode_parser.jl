@@ -18,8 +18,9 @@ opdst = Dict{Int, Union{Int, Nothing}}(
 )
 
 function opix!(s, p, i)
-    i ∈ s && return
+    i ∈ s && return s
     push!(s, i)
+    p[i] ∉ keys(oplen) && return s
     if(p[i] != 99)
         opix!(s, p, i+oplen[p[i]])
     end
@@ -28,7 +29,8 @@ end
 opix(p, i) = opix!(Set{Int}(), p, i)
 
 function dstix!(s, p, oi)
-    for i in sort(collect(oi))
+    for i in oi
+        p[i] ∉ keys(opdst) && continue
         dst = opdst[p[i]]
         if dst isa Int
             push!(s, p[i+dst])
@@ -38,21 +40,16 @@ function dstix!(s, p, oi)
 end
 dstix(p, oi) = dstix!(Set{Int}(), p, oi)
 
-function intcode_parser(p::OffsetArray)
-    oi = opix(p, 0)
+function intcode_parser(p::OffsetArray, i0=0)
+    oi = opix(p, i0)
     di = dstix(p, oi)
-
-    @assert 0 ∈ oi
-    @assert 0 ∈ di
 
     c = Any[]
 
     if allow_ptr
         dst = i -> :( p[$i] )
         idst = i -> :( p[p[$i]] )
-        checkconst! = i -> push!(c, :( $(dst(i)) == $(p[i]) || throw($(ErrorException(string("modified code: ", i)))) ))
-        push!(c, :( p[1] = n ))
-        push!(c, :( p[2] = v ))
+        checkconst! = i -> push!(c, :( $(dst(i)) == $(p[i]) || return runat!(p, $i) ))
     else
         dst = i -> i == 1 ? :n : i == 2 ? :v : i ∈ di ? Symbol("m", i) : p[i]
         idst = i -> i == 1 ? :pn : i == 2 ? :pv : dst(p[i])
@@ -65,8 +62,10 @@ function intcode_parser(p::OffsetArray)
         end
     end
 
+    push!(c, :( @goto start ))
     for i in sort(collect(oi))
         push!(c, LineNumberNode(i, :address))
+        i == i0 && push!(c, :( @label start ))
         checkconst!(i)
         if p[i] == 1
             !allow_ptr && checkconst!.(i+1:i+3)
@@ -75,51 +74,80 @@ function intcode_parser(p::OffsetArray)
             !allow_ptr && checkconst!.(i+1:i+3)
             push!(c, :( $(idst(i+3)) = $(idst(i+1)) * $(idst(i+2)) ))
         elseif p[i] == 99
-            push!(c, :( return $(dst(0)) ))
+            if allow_ptr
+                push!(c, :( return p ))
+            else
+                push!(c, :( return $(dst(0)) ))
+            end
         else
             push!(c, :( throw($(ErrorException(string("Invalid opcode: ", p[i])))) ))
         end
     end
+    push!(c, :( throw($(ErrorException("End of code reached."))) ))
     Expr(:block, c...)
 end
 
 intcode_parser(p) = intcode_parser(OffsetVector(p, 0:length(p)-1))
 
-function programhash!(program::OffsetVector)
-    program[1] = 0
-    program[2] = 0
-    hash(program)
+function programhash!(program::OffsetVector, i0=0)
+    if allow_ptr
+        oi=opix(program, i0)
+        ci=sort(collect(oi))
+    else
+        oi=opix(program, i0)
+        di = dstix(program, oi)
+        ci = setdiff(1:length(program)-1, di)
+    end
+    hash((ci, program[ci], i0))
 end
 
-function compile_intcode(program::OffsetVector)
-    h = programhash!(program)
-    if allow_ptr
-        @eval run_intcode!(::Val{$h}, n, v, p) = $(intcode_parser(program))
-    else
-        @eval run_intcode(::Val{$h}, n, v, pn, pv) = $(intcode_parser(program))
+const compiled_programs = Set{UInt64}()
+
+function runat!(p, i)
+    h = compile_intcode(p, i)
+    Base.invokelatest(run_intcode!, h, p)
+end
+
+function compile_intcode(program::OffsetVector, i0=0)
+    h = programhash!(program, i0)
+    if h ∉ compiled_programs
+        println("Compiling ", h)
+        if allow_ptr
+            @eval run_intcode!(::Val{$h}, p) = $(intcode_parser(program))
+        else
+            @eval run_intcode(::Val{$h}, n, v, pn, pv) = $(intcode_parser(program))
+        end
+        push!(compiled_programs, h)
     end
     Val(h)
 end
 
-function run_intcode(program::OffsetVector, n, v)
-    h = programhash!(program)
+function run_intcode(program::OffsetVector, n, v, i0=0)
+    h = programhash!(program, i0)
+    h ∈ compiled_programs || compile_intcode(program, i0)
     if allow_ptr
-        run_intcode(Val(h), n, v, program)
+        Base.invokelatest(run_intcode, Val(h), n, v, program)
     else
-        run_intcode(Val(h), n, v, program[n], program[v])
+        Base.invokelatest(run_intcode, Val(h), n, v, program[n], program[v])
     end
 end
 
-if allow_ptr
-    run_intcode(h::Val, n, v, p::OffsetVector) = run_intcode!(h, n, v, copy(p))
-else
-    run_intcode(h::Val, n, v, p::OffsetVector) = run_intcode(h, n, v, p[n], p[v])
+function run_intcode(h::Val, n, v, p::OffsetVector)
+    if allow_ptr
+        p = copy(p)
+        p[1] = n
+        p[2] = v
+        run_intcode!(h, p)[0]
+    else
+        run_intcode(h, n, v, p[n], p[v])
+    end
 end
 
 # Test using day 2's example (works with or without pointers)
 
-day2example = [1,0,0,3,2,3,11,0,99,30,40,50]
-day2example = OffsetVector(day2example, 0:length(day2example)-1)
+zerobased(p) = OffsetVector(p, 0:length(p)-1)
+
+day2example = zerobased([1,0,0,3,2,3,11,0,99,30,40,50])
 
 @show intcode_parser( day2example )
 
@@ -132,5 +160,13 @@ h = compile_intcode(day2example)
 if !allow_ptr
     println("Try this: \n   @code_native IntCode.run_intcode(Val(hash(IntCode.day2example)), 12, 2, IntCode.day2example[12], IntCode.day2example[2])")
 end
+
+# Test self-modifying code
+
+modifytest = zerobased([1,0,0,4,0,4,4,0,99])
+
+@show intcode_parser( modifytest )
+@show run_intcode(modifytest, 0, 0)
+@test run_intcode(modifytest, 0, 0) == 4
 
 end # module
