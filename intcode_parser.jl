@@ -179,4 +179,9 @@ modifytest = zerobased([1,0,0,4,0,4,4,0,99])
 @show run_intcode(modifytest, 0, 0)
 @test run_intcode(modifytest, 0, 0)[0] == 4
 
+# Test day2 input
+
+day2program = zerobased(parse.(Int,split(readline("input2.txt"), ",")))
+
+
 end # module
