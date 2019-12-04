@@ -19,3 +19,7 @@ end
 data = parse.(Int, split(readline("input4.txt"), "-"))
 
 @show countpasswords(data[1]:data[2])
+
+# Note: This is a bit slow due to type inference issues.
+# It will be faster once this is merged into Julia:
+# https://github.com/JuliaLang/julia/pull/31138
