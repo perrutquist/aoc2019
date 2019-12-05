@@ -22,33 +22,33 @@ function intcode!(p, input)
     output = Int[]
 
     i = 0
-    m(i,k) = p[i]÷10^(k+1) % 10 == 0 ? p[p[i+k]] : p[i+k]
+    m(k) = p[i]÷10^(k+1) % 10 == 0 ? p[p[i+k]] : p[i+k]
     while true
         op = p[i] % 100
         if op == 99
             break
         elseif op == 1
-            p[p[i+3]] = m(i,1) + m(i,2)
+            p[p[i+3]] = m(1) + m(2)
         elseif op == 2
-            p[p[i+3]] = m(i,1) * m(i,2)
+            p[p[i+3]] = m(1) * m(2)
         elseif op == 3
             p[p[i+1]] = pop!(input)
         elseif op == 4
-            push!(output, m(i,1))
+            push!(output, m(1))
         elseif op == 5
-            if m(i,1) != 0
-                i = m(i,2)
+            if m(1) != 0
+                i = m(2)
                 continue
             end
         elseif op == 6
-            if m(i,1) == 0
-                i = m(i,2)
+            if m(1) == 0
+                i = m(2)
                 continue
             end
         elseif op == 7
-            p[p[i+3]] = m(i,1) < m(i,2)
+            p[p[i+3]] = m(1) < m(2)
         elseif op == 8
-            p[p[i+3]] = m(i,1) == m(i,2)
+            p[p[i+3]] = m(1) == m(2)
         else
             error("Invalid instruction: ", p[i], " at ", i)
         end
