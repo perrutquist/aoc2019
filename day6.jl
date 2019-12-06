@@ -7,7 +7,6 @@ end
 
 function solve(lines)
     p = Dict(scan.(lines))
-    e = setdiff(keys(p), values(p))
 
     function dist!(c, e)
         e ∈ keys(c) && return c[e]
@@ -15,7 +14,7 @@ function solve(lines)
         c[e] = d+1
     end
     c = Dict("COM" => 0)
-    dist!.((c,), e)
+    dist!.((c,), keys(p))
 
     c2 = Dict("COM" => 0)
     s = dist!(c2, "SAN")
