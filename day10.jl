@@ -8,7 +8,7 @@ end
 
 d = hcat(scan.(lines)...)
 
-cc(i) = i[1] + i[2]im
+cc(i) = i[1]-1 + (i[2]-1)im
 a = cc.(findall(==('#'), d))
 
 function blk(a, b, c)
@@ -32,6 +32,14 @@ end
 
 @show m
 
-r = a .- obs
+function vaporize(obs, as, n)
+    v = allvisible(obs, as)
+    if length(v) < n
+        vaporize(obs, setdiff(as, v), n-length(v))
+    else
+        sort!(v, by = a -> mod(angle(a-obs).+pi/2, 2π))
+        100real(v[n]) + imag(v[n])
+    end
+end
 
-ang = sort(unique(rationalize.(angle.(r) ./ pi .+ 1)))
+@show vaporize(obs, a, 200)
