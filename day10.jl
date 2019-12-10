@@ -1,5 +1,3 @@
-using LinearAlgebra
-
 lines = readlines("input10.txt")
 
 function scan(l)
