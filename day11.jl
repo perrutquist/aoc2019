@@ -1,3 +1,5 @@
+using UnicodePlots
+
 include("day9.jl") # reuse intcode computer
 
 program = parse.(Int, split(readline("input11.txt"),","))
